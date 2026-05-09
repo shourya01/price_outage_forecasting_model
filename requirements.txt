@@ -1,0 +1,8 @@
+numpy>=1.23
+pandas>=1.5
+xarray>=2023.1
+netCDF4>=1.6
+lightgbm>=3.3
+scipy>=1.10
+scikit-learn>=1.2
+huggingface_hub>=0.20
