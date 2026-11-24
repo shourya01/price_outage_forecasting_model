@@ -1,0 +1,9 @@
+variant,michigan_24_rmse_mean,michigan_24_rmse_std,michigan_48_rmse_mean,michigan_48_rmse_std,california_24_rmse_mean,california_24_rmse_std,california_48_rmse_mean,california_48_rmse_std
+persistence_only,426.230,,348.092,,2099.402,,2451.595,
+cluster_only,439.654,,335.829,,1846.408,,1757.977,
+backbone_arima,401.602,,306.698,,1855.843,,1825.904,
+backbone_ar1,399.109,,308.929,,1849.936,,1812.507,
+arithmetic_mean,379.670,,300.834,,1887.964,,1957.985,
+convex,439.654,,335.829,,1839.399,,1763.198,
+weather_persistence,404.351,,309.888,,1857.704,,1833.107,
+full,402.323,,309.690,,1855.494,,1809.473,

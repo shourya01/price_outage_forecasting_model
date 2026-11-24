@@ -1,13 +1,33 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.DS_Store
 *.egg-info/
 .venv/
 venv/
+
+# Editors and OS
+.DS_Store
 .idea/
 .vscode/
+
+# Data, weather forecasts and model files are never tracked
 data/
+forecasts/
 *.nc
 *.csv
-clusters_*.json
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Results: only the two summary tables are tracked
+results/*
+!results/main_table.csv
+!results/main_table.md
+!results/main_table.tex
+!results/ablation_table.csv
+!results/ablation_table.md
+!results/ablation_table.tex
+results_seeds/

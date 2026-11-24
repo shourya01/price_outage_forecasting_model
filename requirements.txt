@@ -1,8 +1,12 @@
-numpy>=1.23
-pandas>=1.5
-xarray>=2023.1
-netCDF4>=1.6
-lightgbm>=3.3
-scipy>=1.10
-scikit-learn>=1.2
-huggingface_hub>=0.20
+# Python 3.12. For GPU: pip install torch --index-url https://download.pytorch.org/whl/cu128   (before this file)
+numpy
+pandas
+xarray
+netCDF4
+scipy
+scikit-learn
+lightgbm==4.7.0
+statsmodels==0.15.0
+torch>=2.11
+timesfm[torch]==3.0.1
+dirichletcal

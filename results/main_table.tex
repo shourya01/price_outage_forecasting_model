@@ -1,0 +1,17 @@
+\begin{tabular}{lcccccccc}
+\toprule
+& \multicolumn{4}{c}{\textbf{Michigan}} & \multicolumn{4}{c}{\textbf{California}} \\
+\cmidrule(lr){2-5} \cmidrule(lr){6-9}
+Method & RMSE (24h) & MAE (24h) & RMSE (48h) & MAE (48h) & RMSE (24h) & MAE (24h) & RMSE (48h) & MAE (48h) \\
+\midrule
+All-Zeros & 490.898 & 254.866 & 362.321 & 138.716 & 2061.834 & 646.408 & 1909.216 & 551.504 \\
+ARIMA(1,0,1) & \underline{430.722} & \underline{210.042} & \underline{331.733} & \underline{125.984} & \underline{1887.376} & \underline{560.134} & 1825.510 & \underline{520.916} \\
+ARIMAX(1,0,1) & 436.141 & 217.702 & 331.997 & 130.349 & 2383.833 & 1093.613 & 2417.197 & 1172.344 \\
+LSTM & 478.298 & 257.450 & 368.224 & 164.244 & 2109.166 & 876.721 & 2128.202 & 924.457 \\
+LSTM (Sparsity Cl.) & 471.988 & 242.889 & 360.210 & 148.775 & 2021.799 & 730.911 & 2302.310 & 910.165 \\
+ZIP & 463.130 & 247.050 & 349.468 & 146.932 & 1902.870 & 630.093 & \underline{1814.865} & 639.387 \\
+TSHM & 451.260 & 235.845 & 343.960 & 142.096 & 1917.710 & 667.688 & 1850.304 & 662.808 \\
+TimesFM 3.0 (zero-shot) & 458.936 & 231.907 & 349.513 & 135.264 & 2046.472 & 638.260 & 2522.160 & 681.504 \\
+PRiCE & \textbf{402.323} & \textbf{188.134} & \textbf{309.690} & \textbf{116.020} & \textbf{1855.494} & \textbf{549.300} & \textbf{1809.473} & \textbf{510.592} \\
+\bottomrule
+\end{tabular}

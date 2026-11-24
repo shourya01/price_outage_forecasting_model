@@ -1,154 +1,199 @@
-# PRiCE: A Two-Expert Hybrid Model for Outage Forecasting over Sensor Networks
+# PRiCE: outage forecasting over sensor networks
 
-Reference implementation for the paper
+Code for the paper
 
 > Shourya Bose, Tomas Kaljevic, Yu Zhang.
 > *PRiCE: A Two-Expert Hybrid Model for Outage Forecasting over Sensor Networks.*
 
-PRiCE combines a parameter-free persistence forecast with a per-sensor AR(2)
-backbone augmented by a per-cluster gradient-boosted residual regressor, and
-aggregates the two predictors by a fixed geometric mean. The architecture
-targets outage forecasting over a two-layer sensor network in which one layer
-(e.g., county-level outage sensors) feeds the response and the other (a
-meteorological sensor network) feeds the covariates.
+## What it is
 
-```
-code/
-├── reproduce.py         # one-click runner (auto-downloads California)
-├── price_minimal.py     # forecasting script (trains and evaluates PRiCE)
-├── cluster_counties.py  # silhouette-based sensor clustering
-├── requirements.txt
-└── README.md
-```
+PRiCE forecasts hourly county-level power outage counts 24 or 48 hours ahead from the last 48 hours of outages and
+weather. It combines two experts:
 
-The scripts read NetCDF data from a sibling `data/` directory by default
-(`../data/` relative to this folder).
+- **Persistence expert.** The last observed outage count of each county, held over the whole horizon.
+- **Cluster expert.** A per-county AR(2) backbone plus a gradient-boosted residual regressor (LightGBM,
+  absolute-error loss) shared by the counties of a cluster. The backbone is fit by Yule-Walker on the training
+  split; when the estimate is not stationary it falls back to AR(1). Counties are clustered by k-means on seven
+  training-split statistics, and the number of clusters K is chosen by silhouette from {3, 4, 5, 6, 8}.
 
-## Quick start
+The two experts are combined by a shifted geometric mean,
+
+$$\hat y = \max\{\sqrt{(E_p+\kappa)(E_c+\kappa)}-\kappa,\ 0\}, \qquad \kappa = 0.5,$$
+
+so that a zero from one expert does not force the forecast to zero. The shift is fixed, not tuned (`KAPPA` in
+`price/methods/price.py`).
+
+This repository builds the paper's main results table (PRiCE and eight baselines on two datasets and two
+lookaheads) and its ablation table.
+
+| Key | Method | Weather | Device |
+|---|---|---|---|
+| `zeros` | All-Zeros | no | CPU |
+| `arima` | ARIMA(1,0,1), per county | no | CPU |
+| `arimax` | ARIMAX(1,0,1), per county, weather as exogenous regressors | yes | CPU |
+| `lstm` | LSTM | yes | GPU |
+| `lstm_sparsity` | LSTM, one model per sparsity group of counties | yes | GPU |
+| `zip` | Zero-inflated Poisson with gradient-boosted stages | yes | CPU |
+| `tshm` | Two-stage hurdle model (occurrence classifier, Tweedie count regressor) | yes | CPU |
+| `timesfm` | TimesFM 3.0 on outages with weather covariates, zero-shot | yes | GPU |
+| `price` | PRiCE | yes | CPU |
+
+Each method is one module in `price/methods/` exposing `run(experiment, **options) -> predictions`.
+
+## Install
+
+Python 3.12.
 
 ```bash
-# 1. Set up the environment (Python 3.10+).
+pip install torch --index-url https://download.pytorch.org/whl/cu128   # GPU build; skip for CPU only
 pip install -r requirements.txt
-
-# 2. Reproduce the California results (auto-downloads the dataset).
-python reproduce.py --dataset california
-
-# 3. Reproduce the Michigan results (after obtaining the dataset, see below).
-python reproduce.py --dataset michigan --michigan-nc /path/to/michigan.nc
 ```
 
-Each call runs both 24-hour and 48-hour lookaheads. The reported metrics
-match Tables I and II of the paper. Per-row predictions are saved to
-`../data/{ca,mi}{24,48}_price.csv`.
+The TimesFM 3.0 baseline downloads its pretrained checkpoint (`google/timesfm-3.0-pytorch`) from Hugging Face on
+first use.
 
-## Environment
+## Data layout expected
 
-Tested with Python 3.10. `pip install -r requirements.txt` installs `numpy`,
-`pandas`, `xarray`, `netCDF4`, `lightgbm`, `scipy`, `scikit-learn`, and
-`huggingface_hub`. The `--ar-order arima11` flag in `price_minimal.py`
-additionally requires `pip install statsmodels`, but this is optional and not
-needed for the default `ar2` backbone.
+No data is shipped with this repository. Two inputs are needed: a directory with the outage files and a directory
+with the weather forecasts.
 
-## Datasets
+### Outage data
 
-Both datasets are stored as NetCDF with the layout
+`<data-dir>/michigan.nc` and `<data-dir>/california.nc`, NetCDF files with
 
-- `out` — outage counts, shape `(n_sensors, n_timesteps)`, integer-valued.
-- `weather` — weather covariates, shape `(n_sensors, n_timesteps, n_features)`, float-valued.
-- `timestamp` — UTC hourly timestamps, shape `(n_timesteps,)`.
-- `location` — sensor identifiers, shape `(n_sensors,)`.
-- `feature` — weather feature names, shape `(n_features,)`.
+| Variable | Dimensions | Content |
+|---|---|---|
+| `out` | location, timestamp | hourly outage counts per county |
+| `weather` | location, timestamp, feature | hourly weather covariates |
+| `timestamp` | timestamp | hourly timestamps |
+| `location` | location | county identifiers |
+| `feature` | feature | names of the weather variables |
 
-### California (auto-downloaded)
+- **California** is public: <https://huggingface.co/datasets/shourya01/ca_power_outages>. Download
+  `california_hourly.nc` and save it as `california.nc`.
+- **Michigan** comes from the INFORMS DMDA 2025 data challenge
+  (<https://sites.google.com/view/dmdaworkshop2025/data-challenge>) and is not redistributable. After obtaining it
+  from the organizers, build `michigan.nc` with the layout above.
 
-`reproduce.py --dataset california` downloads the preprocessed hourly NetCDF
-from Hugging Face the first time it is run
+### Weather forecasts
 
-- <https://huggingface.co/datasets/shourya01/ca_power_outages>
+One CSV per state and lookahead with columns `timestamp, county, <weather variables>` and one row per county and
+test target hour. `county` holds the identifiers of `location`. Accepted locations inside `<forecast-dir>`:
 
-The file is saved to `../data/california.nc`. The dataset covers 58 California
-counties from January 2019 through December 2020, with 24 ERA5 weather
-features collocated on the outage grid.
+```
+<state>_<lookahead>.csv                                   e.g. michigan_24.csv
+<state>*_<lookahead>_*/weather_forecast.csv               e.g. california_672_24_zero_shot/weather_forecast.csv
+```
 
-### Michigan (user-supplied)
+The paper uses zero-shot TimesFM 3.0 forecasts of each weather variable (one univariate forecast per county and
+variable). A variable that the forecast file does not contain is held at its last observed value over the horizon
+(California's precipitation, `tp`).
 
-The Michigan dataset is the property of the INFORMS Data Mining Society and is
-**not redistributable**. To obtain it, contact the organizers of the INFORMS
-DMDA Data Challenge
-
-- Challenge website <https://sites.google.com/view/dmdaworkshop2025/data-challenge>
-
-After receiving access, build a `michigan.nc` file with the variable layout
-above and pass its path to `reproduce.py` via `--michigan-nc`.
-
-## What `reproduce.py` does
-
-For each requested lookahead $\tau\in\{24,48\}$ the script
-
-1. ensures the dataset is on disk (downloading California if necessary),
-2. runs `cluster_counties.py` to compute the silhouette-selected $k$-means
-   partition of the sensors and write `clusters_{ca,mi}_{24,48}.json`,
-3. runs `price_minimal.py` with the paper's hyperparameters (lookback 48,
-   400 boosting rounds with patience-30 early stopping, MAE loss, AR(2)
-   backbone, 31 leaves on Michigan and 63 leaves on California, training
-   stride 4 on Michigan and 8 on California) and writes the per-row test
-   predictions to `../data/{ca,mi}{24,48}_price.csv`.
-
-Each `price_minimal.py` invocation prints the per-sensor RMSE and MAE for the
-all-zeros baseline, the persistence expert, the AR backbone alone, the cluster
-expert, two aggregator ablations (arithmetic mean and validation-tuned convex
-combination), and PRiCE itself. The component ablation in the paper
-corresponds to the printed `E_persist` and `E_cluster` rows; the aggregator
-ablation corresponds to the `arithmetic mean` and `val-tuned convex` rows;
-the backbone and weather ablations are reproduced by re-running
-`price_minimal.py` directly with the appropriate flags listed below.
-
-All parametric components (the AR backbone and the per-cluster GBDTs) are fit
-on the training set; the validation set is used only for early stopping of the
-GBDTs.
-
-## Direct command-line use
-
-If you want to bypass `reproduce.py` and call the underlying scripts
-directly, the commands used in the paper are
+## How to reproduce the two tables
 
 ```bash
-# Cluster the sensors (once per dataset and lookahead).
-python cluster_counties.py --nc ../data/michigan.nc   --lookahead 24 --m-val 5  --m-test 5  --out ../data/clusters_mi_24.json
-python cluster_counties.py --nc ../data/michigan.nc   --lookahead 48 --m-val 5  --m-test 5  --out ../data/clusters_mi_48.json
-python cluster_counties.py --nc ../data/california.nc --lookahead 24 --m-val 30 --m-test 30 --out ../data/clusters_ca_24.json
-python cluster_counties.py --nc ../data/california.nc --lookahead 48 --m-val 30 --m-test 30 --out ../data/clusters_ca_48.json
-
-# Fit and evaluate PRiCE.
-python price_minimal.py --nc ../data/michigan.nc   --clusters ../data/clusters_mi_24.json \
-    --lookahead 24 --m-val 5  --m-test 5  --train-stride 4 --top-weather 24 \
-    --n-rounds 400 --num-leaves 31 --ar-order ar2 --out-csv ../data/mi24_price.csv
-
-python price_minimal.py --nc ../data/michigan.nc   --clusters ../data/clusters_mi_48.json \
-    --lookahead 48 --m-val 5  --m-test 5  --train-stride 4 --top-weather 24 \
-    --n-rounds 400 --num-leaves 31 --ar-order ar2 --out-csv ../data/mi48_price.csv
-
-python price_minimal.py --nc ../data/california.nc --clusters ../data/clusters_ca_24.json \
-    --lookahead 24 --m-val 30 --m-test 30 --train-stride 8 --top-weather 24 \
-    --n-rounds 400 --num-leaves 63 --ar-order ar2 --out-csv ../data/ca24_price.csv
-
-python price_minimal.py --nc ../data/california.nc --clusters ../data/clusters_ca_48.json \
-    --lookahead 48 --m-val 30 --m-test 30 --train-stride 8 --top-weather 24 \
-    --n-rounds 400 --num-leaves 63 --ar-order ar2 --out-csv ../data/ca48_price.csv
+./run_all.sh <data-dir> <forecast-dir> [results-dir]     # runs every method, then builds both tables
 ```
 
-## Flags
+`run_all.sh` runs three commands, which can also be run separately from the repository root:
 
-- `--ar-order {arima11,ar1,ar2}` selects the per-sensor temporal backbone.
-  The default is `ar2`. The `arima11` option additionally requires `pip
-  install statsmodels`.
-- `--weather-mode {oracle,persistence}` controls whether the future weather
-  covariate is the supplied forecast (`oracle`, default) or the last observed
-  reading (`persistence`).
-- `--num-leaves`, `--n-rounds`, `--lr`, `--train-stride`, `--top-weather`,
-  `--lookback` follow LightGBM and feature-construction conventions; the
-  values used in the paper are the recommended defaults.
+```bash
+python -m price.run      --data-dir <data-dir> --forecast-dir <forecast-dir> --out results   # main table: every method
+python -m price.table    --results results
+python -m price.ablation --data-dir <data-dir> --forecast-dir <forecast-dir> --out results   # ablation table of PRiCE
+```
+
+A task that already has results is skipped, so an interrupted run can be restarted; `--force` reruns everything.
+Useful options of `price.run`: `--methods`, `--datasets`, `--lookaheads`, `--jobs` (CPU tasks at once), `--device`.
+`python -m price.ablation --table-only --out results` rebuilds the ablation table from existing metrics.
+
+### Outputs
+
+```
+results/<state>_<lookahead>/<method>/outages_forecast.csv   timestamp, location, pred
+results/<state>_<lookahead>/<method>/metrics.json           rmse, mae, runtime, variables, forecast handling
+results/main_table.{md,tex,csv}
+results/<state>_<lookahead>/ablation/seed_<seed>/<variant>/metrics.json
+results/ablation_table.{md,tex,csv}
+```
+
+### Reference tables
+
+`results/main_table.{md,tex,csv}` and `results/ablation_table.{md,tex,csv}` in this repository are the two tables
+produced by this code with the inputs described above (seed 42), for comparison with a fresh run. A run that writes
+to `results/` overwrites them. The `.tex` files use the paper's macros (`\price`, `\ep`, `\ec`, `\eb`, `\mb`).
+
+### Protocol shared by all methods
+
+Splits, weather variables, test-time weather and scoring live in `price/data.py` and are the same for every method.
+What each method fits on follows its original design: ARIMA and ARIMAX are fit on all hours before the test targets,
+ZIP refits on training plus validation after early stopping, and the others fit on training and use validation for
+early stopping or calibration.
+
+- **Horizon.** Lookback 48 h; lookahead 24 h or 48 h; `m` = 5 (Michigan) or 30 (California) test windows.
+- **Splits.** The test split is the last 48 + m x lookahead hours, of which the last m x lookahead hours are the
+  test targets, forecast in m consecutive windows. The validation split is the same length, immediately before.
+  Training is everything earlier.
+- **Weather variables.** The 24 variables with the largest mean absolute correlation with outages on the training
+  split. Michigan's file has 109 variables, so this is a selection (it differs between the two lookaheads because
+  the training split does). California's file has exactly 24.
+- **Weather at test time.** Models are trained and validated on actual weather. For a test window, the lookback
+  uses actual weather and the target hours use the forecast file. Forecasts are clipped to physical bounds.
+- **Missing hours.** The weather is used as stored. Michigan has two hours whose weather is zero in every variable
+  and county (both in the training period); they are left as they are.
+- **Metrics.** RMSE and MAE per county over the test targets, averaged over counties.
+
+### Ablation table
+
+`python -m price.ablation` reports the test RMSE of PRiCE with one part changed:
+
+| Group | Variant |
+|---|---|
+| Component | persistence expert alone; cluster expert alone |
+| Backbone | ARIMA(1,0,1) or AR(1) in place of AR(2) |
+| Aggregator | arithmetic mean or a convex combination (weight tuned on validation) in place of the shifted geometric mean |
+| Weather | target-hour weather replaced by the last observed weather, in training and at test time |
+
+Four models are trained per state and lookahead (full, the two backbones, the weather variant); the component and
+aggregator rows are read off the full model. The default is one seed (42). `--seeds 42 1 2 ...` repeats the trainings
+per seed and the table then reports the mean over the seeds given.
+
+### Runtime
+
+The full table takes a few hours on 8 CPU cores and one GPU. The California runs of `tshm`, `zip` and the two LSTMs
+dominate. The California LSTMs hold about 7 GB of training windows in memory each; they run one at a time.
+
+### Reproducibility
+
+One seed (default 42) is used for everything, and LightGBM runs with a fixed number of threads (4 for PRiCE and ZIP,
+1 for TSHM), so a rerun on the same machine gives the same numbers. The county clustering of PRiCE uses its own
+fixed seed. Across machines, expect the LightGBM-based methods to match, ARIMA/ARIMAX to agree to about 0.1%, and
+the GPU-trained LSTMs to vary slightly.
+
+## Repository layout
+
+```
+price/data.py            experiment loading, splits, variable selection, forecast handling, scoring
+price/methods/           one module per method, plus the registry
+price/run.py             task runner for the main table
+price/table.py           main table builder
+price/ablation.py        ablation runner and table builder
+run_all.sh               all steps
+results/                 the two reference tables (md, tex, csv)
+tests/                   regression scripts; they train models and need the datasets (usage in each file)
+requirements.txt
+```
 
 ## Citation
 
-If you use this code, please cite the paper.
+If you use this code, please cite the paper. The entry below is a placeholder until the publication details are
+final.
+
+```bibtex
+@article{bose_price,
+  title   = {PRiCE: A Two-Expert Hybrid Model for Outage Forecasting over Sensor Networks},
+  author  = {Bose, Shourya and Kaljevic, Tomas and Zhang, Yu},
+  journal = {TODO},
+  year    = {TODO}
+}
+```

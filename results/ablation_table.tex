@@ -1,0 +1,22 @@
+\begin{tabular}{lcccc}
+\toprule
+Variant & MI 24h & MI 48h & CA 24h & CA 48h \\
+\midrule
+\multicolumn{5}{l}{\emph{Component (drops one expert)}} \\
+$\ep$ alone & 426.230 & 348.092 & 2099.402 & 2451.595 \\
+$\ec$ alone & 439.654 & 335.829 & 1846.408 & 1757.977 \\
+\midrule
+\multicolumn{5}{l}{\emph{Backbone (replaces $\eb$)}} \\
+ARIMA(1,0,1) & 401.602 & 306.698 & 1855.843 & 1825.904 \\
+AR(1) & 399.109 & 308.929 & 1849.936 & 1812.507 \\
+\midrule
+\multicolumn{5}{l}{\emph{Aggregator (replaces $\sqrt{\cdot\,\cdot}$)}} \\
+Arithmetic mean & 379.670 & 300.834 & 1887.964 & 1957.985 \\
+Convex (val-tuned $\alpha$) & 439.654 & 335.829 & 1839.399 & 1763.198 \\
+\midrule
+\multicolumn{5}{l}{\emph{Weather (replaces $\hat{\mb{w}}_{i,t+\tau}$)}} \\
+Persistence ($\hat{\mb{w}}_{i,t+\tau}=\mb{w}_{i,t}$) & 404.351 & 309.888 & 1857.704 & 1833.107 \\
+\midrule
+\textbf{\price\ (full)} & \textbf{402.323} & \textbf{309.690} & \textbf{1855.494} & \textbf{1809.473} \\
+\bottomrule
+\end{tabular}
