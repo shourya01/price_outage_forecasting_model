@@ -203,14 +203,17 @@ requirements.txt
 
 ## Citation
 
-If you use this code, please cite the paper. The entry below is a placeholder until the publication details are
-final.
+If you use this code, please cite the paper. The entry will be updated with the venue once it is published.
 
 ```bibtex
-@article{bose_price,
-  title   = {PRiCE: A Two-Expert Hybrid Model for Outage Forecasting over Sensor Networks},
-  author  = {Bose, Shourya and Kaljevic, Tomas and Zhang, Yu},
-  journal = {TODO},
-  year    = {TODO}
+@misc{bose2026price,
+  title  = {PRiCE: A Two-Expert Hybrid Model for Outage Forecasting over Sensor Networks},
+  author = {Bose, Shourya and Kaljevic, Tomas and Zhang, Yu},
+  year   = {2026},
+  note   = {Manuscript}
 }
 ```
+
+## License
+
+MIT; see `LICENSE`.
