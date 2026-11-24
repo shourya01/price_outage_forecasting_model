@@ -70,7 +70,7 @@ with the weather forecasts.
 | `feature` | feature | names of the weather variables |
 
 - **California** is public: <https://huggingface.co/datasets/shourya01/ca_power_outages>. Download
-  `california_hourly.nc` and save it as `california.nc`.
+  `california_hourly.nc` and save it as `california.nc` (commands below).
 - **Michigan** comes from the INFORMS DMDA 2025 data challenge
   (<https://sites.google.com/view/dmdaworkshop2025/data-challenge>) and is not redistributable. After obtaining it
   from the organizers, build `michigan.nc` with the layout above.
@@ -88,6 +88,23 @@ test target hour. `county` holds the identifiers of `location`. Accepted locatio
 The paper uses zero-shot TimesFM 3.0 forecasts of each weather variable (one univariate forecast per county and
 variable). A variable that the forecast file does not contain is held at its last observed value over the horizon
 (California's precipitation, `tp`).
+
+- **California**: the forecasts used in the paper are in the `forecasts/` folder of the same Hugging Face dataset
+  (24 h lookahead from a 672 h context, 48 h lookahead from a 336 h context).
+- **Michigan**: the forecasts are derived from the challenge data and are not redistributed. Produce them with
+  TimesFM 3.0 in the format above (the paper uses a 672 h context for both lookaheads).
+
+To fetch everything public for California:
+
+```bash
+pip install huggingface_hub
+hf download shourya01/ca_power_outages california_hourly.nc --repo-type dataset --local-dir <data-dir>
+mv <data-dir>/california_hourly.nc <data-dir>/california.nc
+hf download shourya01/ca_power_outages --repo-type dataset --include "forecasts/*" --local-dir <download-dir>
+# then pass <download-dir>/forecasts as <forecast-dir>
+```
+
+With only the California inputs, add `--datasets california` to `price.run` and `price.ablation`.
 
 ## How to reproduce the two tables
 
